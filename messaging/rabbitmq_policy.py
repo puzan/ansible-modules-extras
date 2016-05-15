@@ -82,6 +82,10 @@ EXAMPLES = '''
 - name: ensure the default vhost contains the HA policy
   rabbitmq_policy: name=HA pattern='.*' tags="ha-mode=all"
 '''
+
+import json
+
+
 class RabbitMqPolicy(object):
     def __init__(self, module, name):
         self._module = module
@@ -107,13 +111,23 @@ class RabbitMqPolicy(object):
         policies = self._exec(['list_policies'], True)
 
         for policy in policies:
-            policy_name = policy.split('\t')[1]
-            if policy_name == self._name:
+            policy_data = policy.split('\t')
+
+            policy_name = policy_data[1]
+            apply_to = policy_data[2]
+            pattern = policy_data[3].replace('\\\\', '\\')
+            tags = json.loads(policy_data[4])
+            priority = policy_data[5]
+
+            if (policy_name == self._name and
+                    apply_to == self._apply_to and
+                    tags == self._tags and
+                    priority == self._priority and
+                    pattern == self._pattern):
                 return True
         return False
 
     def set(self):
-        import json
         args = ['set_policy']
         args.append(self._name)
         args.append(self._pattern)
