@@ -47,13 +47,15 @@ options:
     version_added: "2.1"
   pattern:
     description:
-      - A regex of queues to apply the policy to.
-    required: true
+      - A regex of queues to apply the policy to. Required when
+        C(state=present).
+    required: false
     default: null
   tags:
     description:
-      - A dict or string describing the policy.
-    required: true
+      - A dict or string describing the policy. Required when
+        C(state=present).
+    required: false
     default: null
   priority:
     description:
@@ -108,6 +110,10 @@ class RabbitMqPolicy(object):
         return list()
 
     def has_modifications(self):
+        if self._pattern is None or self._tags is None:
+            self._module.fail_json(msg=('pattern and tags are required for '
+                                        'state=present'))
+
         policies = self._exec(['list_policies'], True)
 
         return not any([self._policy_check(policy) for policy in policies])
@@ -157,9 +163,9 @@ def main():
     arg_spec = dict(
         name=dict(required=True),
         vhost=dict(default='/'),
-        pattern=dict(required=True),
+        pattern=dict(required=False, default=None),
         apply_to=dict(default='all', choices=['all', 'exchanges', 'queues']),
-        tags=dict(type='dict', required=True),
+        tags=dict(type='dict', required=False, default=None),
         priority=dict(default='0'),
         node=dict(default='rabbit'),
         state=dict(default='present', choices=['present', 'absent']),
