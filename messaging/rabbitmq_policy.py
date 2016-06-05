@@ -107,25 +107,15 @@ class RabbitMqPolicy(object):
             return out.splitlines()
         return list()
 
-    def list(self):
+    def has_modifications(self):
         policies = self._exec(['list_policies'], True)
 
-        for policy in policies:
-            policy_data = policy.split('\t')
+        return not any([self._policy_check(policy) for policy in policies])
 
-            policy_name = policy_data[1]
-            apply_to = policy_data[2]
-            pattern = policy_data[3].replace('\\\\', '\\')
-            tags = json.loads(policy_data[4])
-            priority = policy_data[5]
+    def should_be_deleted(self):
+        policies = self._exec(['list_policies'], True)
 
-            if (policy_name == self._name and
-                    apply_to == self._apply_to and
-                    tags == self._tags and
-                    priority == self._priority and
-                    pattern == self._pattern):
-                return True
-        return False
+        return any([self._policy_check_by_name(policy) for policy in policies])
 
     def set(self):
         args = ['set_policy']
@@ -141,6 +131,26 @@ class RabbitMqPolicy(object):
 
     def clear(self):
         return self._exec(['clear_policy', self._name])
+
+    def _policy_check(self, policy):
+        policy_data = policy.split('\t')
+
+        policy_name = policy_data[1]
+        apply_to = policy_data[2]
+        pattern = policy_data[3].replace('\\\\', '\\')
+        tags = json.loads(policy_data[4])
+        priority = policy_data[5]
+
+        return (policy_name == self._name and
+                apply_to == self._apply_to and
+                tags == self._tags and
+                priority == self._priority and
+                pattern == self._pattern)
+
+    def _policy_check_by_name(self, policy):
+        policy_name = policy.split('\t')[1]
+
+        return policy_name == self._name
 
 
 def main():
@@ -165,14 +175,12 @@ def main():
     rabbitmq_policy = RabbitMqPolicy(module, name)
 
     changed = False
-    if rabbitmq_policy.list():
-        if state == 'absent':
-            rabbitmq_policy.clear()
-            changed = True
-        else:
-            changed = False
-    elif state == 'present':
+
+    if state == 'present' and rabbitmq_policy.has_modifications():
         rabbitmq_policy.set()
+        changed = True
+    elif state == 'absent' and rabbitmq_policy.should_be_deleted():
+        rabbitmq_policy.clear()
         changed = True
 
     module.exit_json(changed=changed, name=name, state=state)
